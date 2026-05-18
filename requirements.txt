@@ -6,3 +6,8 @@ bcrypt
 python-dotenv
 pydantic
 bleach
+spacy
+pdfplumber
+pytesseract
+pdf2image
+sentence-transformers

@@ -10,7 +10,8 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 
 from security import token_required, sanitize_string, LoginSchema, RegisterSchema
-
+from ekstraksi_pdf import ekstraksi_pdf_cv
+from clean_text import cleaning
 # Load environment variables
 load_dotenv()
 
@@ -32,7 +33,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # --- Routes ---
 
-@app.route('/register', methods=['POST'])
+@app.route('/api/register', methods=['POST'])
 def register():
     try:
         data = request.get_json()
@@ -68,7 +69,7 @@ def register():
     except Exception as e:
         return jsonify({'message': 'Internal server error'}), 500
 
-@app.route('/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     try:
         data = request.get_json()
@@ -102,12 +103,21 @@ def login():
         errors = [error['msg'] for error in e.errors()]
         return jsonify({'message': 'Validation failed', 'errors': errors}), 400
 
-@app.route('/protected', methods=['GET'])
+@app.route('/api/protected', methods=['GET'])
 @token_required
 def protected_route(current_user_id):
     return jsonify({
         'message': f'Hello, this is a protected route. User ID: {current_user_id}'
     }), 200
 
+@app.route("/api/analyze", methods=["POST"])
+def analyze_pdf():
+    file = request.files.get("image")
+    if file:
+        text = ekstraksi_pdf_cv(file, file.filename)
+        token, vektor = cleaning(text)
+        return jsonify({"token": token, "vektor": vektor.tolist()}), 200
+    else:
+        return jsonify({"error": "No file uploaded"}), 400
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
