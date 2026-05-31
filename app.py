@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from security import token_required, sanitize_string, LoginSchema, RegisterSchema
 from ekstraksi_pdf import ekstraksi_pdf_cv
 from clean_text import cleaning
+from text_processor import clean_cv_text, get_embedding, inspect_tokens
 # Load environment variables
 load_dotenv()
 
@@ -115,8 +116,10 @@ def analyze_pdf():
     file = request.files.get("image")
     if file:
         text = ekstraksi_pdf_cv(file, file.filename)
-        token, vektor = cleaning(text)
-        return jsonify({"token": token, "vektor": vektor.tolist()}), 200
+        clean_cv = clean_cv_text(text)
+        vec_cv = get_embedding(clean_cv)
+        token = inspect_tokens(clean_cv)
+        return jsonify({"token": token, "vektor": vec_cv.tolist(), "text": clean_cv}), 200
     else:
         return jsonify({"error": "No file uploaded"}), 400
 if __name__ == '__main__':
