@@ -39,3 +39,63 @@ Digunakan oleh library pdf2image untuk mengubah halaman PDF menjadi gambar (PNG/
    - Extract file zip tersebut.
    - Pindahkan folder hasil extract (misalnya bernama poppler-xx.xx.x) ke lokasi permanen yang mudah diakses.
    - Rekomendasi: Pindahkan ke C:\Tools\poppler atau D:\Tools\poppler.
+
+##### Untuk menjalankan di windows mohon ganti kode di ekstraksi_pdf.py dan sesuaikan dengan ruang lingkup anda
+
+```bash
+# sesuaikan path dengan path anda
+POPPLER_PATH = r'E:\data\poppler-25.12.0\Library\bin'
+pytesseract.pytesseract.tesseract_cmd = r'E:\data\tesseract\tesseract.exe'
+
+```
+
+### Untuk Build ke docker harap ganti url mongodbnya di .env
+
+### di file ekstraksi_pdf.py komentari baris berikut
+
+```bash
+# komentari baris ini dan hapus variabel POPPLER_PATH disetiap pemanggilan
+POPPLER_PATH = r'E:\data\poppler-25.12.0\Library\bin'
+pytesseract.pytesseract.tesseract_cmd = r'E:\data\tesseract\tesseract.exe'
+
+```
+
+#### Untuk menggnakan API protected pada header set bagian Authorization
+
+```bash
+# ganti token setelah barier tersebut dengan token yang didapat dari setelah login
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNmEyODBlNTY4YWI5OWI2YWNkOWRiNGYyIiwiZXhwIjoxNzgxMDk2NDE0fQ.pzrCDebOvqL_vmwxcx5ELVluSEVOGVMoJfZeprf5kkU
+```
+
+3. Instalasi MongoDB Compass
+   - Download MongoDB Compass
+     Kunjungi situs resmi: https://www.mongodb.com/try/download/compass
+     Pilih versi yang sesuai dengan sistem operasi Anda (Windows, macOS, atau Linux)
+     Download installer-nya
+   - Instalasi di Windows
+     Jalankan file .exe yang sudah didownload
+     Ikuti wizard instalasi (Next → Next → Install)
+     Tunggu proses instalasi selesai
+     Klik "Finish" untuk menyelesaikan
+
+4. Menggunakan MongoDB Compass
+   - Koneksi ke Database
+     Buka MongoDB Compass
+     Masukkan connection string:
+     Lokal: mongodb://localhost:27017
+     Atlas: Copy dari MongoDB Atlas dashboard
+     Klik "Connect"
+   - Membuat Database Baru
+     Setelah terhubung, klik "Create Database"
+     Masukkan nama database
+     Masukkan nama collection pertama
+     Klik "Create Database"
+   - Menambahkan Data
+     Pilih collection yang ingin ditambahkan data
+     Klik "Add Data" → "Insert Document"
+     Masukkan data dalam format JSON
+     Klik "Insert"
+   - Query Data
+     Gunakan tab "Filter" untuk mencari data
+     Contoh filter: { "nama": "John" }
+     Klik "Find" untuk melihat hasil

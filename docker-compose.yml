@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  # Service untuk Aplikasi Python Anda
+  web:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "5000:5000" # Sesuaikan port aplikasi Anda
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/quickhire
+    depends_on:
+      - mongo
+    networks:
+      - app-network
+
+  # Service untuk MongoDB
+  mongo:
+    image: mongo:6.0
+    ports:
+      - "27017:27017" # Opsional: jika ingin akses DB dari host luar
+    volumes:
+      - mongo-data:/data/db # Menyimpan data agar tidak hilang saat restart
+    networks:
+      - app-network
+
+volumes:
+  mongo-data:
+
+networks:
+  app-network:
+    driver: bridge
