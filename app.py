@@ -2,7 +2,7 @@ import os
 import jwt
 import datetime
 import bcrypt
-import asyncio
+from bson import ObjectId
 from functools import wraps
 from flask import Flask, request, jsonify
 from pydantic import ValidationError
@@ -10,11 +10,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
-
 from security import token_required, sanitize_string, LoginSchema, RegisterSchema
-from ekstraksi_pdf import ekstraksi_pdf_cv
-from clean_text import cleaning
-from text_processor import clean_cv_text, get_embedding, inspect_tokens
 from processing import processing_file
 # Load environment variables
 load_dotenv()
@@ -123,38 +119,123 @@ def protected_route(current_user_id):
     }), 200
 
 @app.route("/api/analyze", methods=["POST"])
-def analyze_pdf():
-    files = request.files.getlist("image")
-    arr_result = []
+@token_required
+def analyze_pdf(current_user_id):
+    try:
+        files = request.files.getlist("image")
+        job_deskription = request.form.get("job_description")
+        arr_result = []
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        results = [executor.submit(processing_file, file) for file in files]
-        for result in results:
-            token, vec_cv, clean_cv, filename = result.result()
-            arr_result.append({
-                "token": token,
-                "vektor": vec_cv.tolist(),
-                "text": clean_cv,
-                "filename": filename
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            results = [executor.submit(processing_file, file, job_deskription) for file in files]
+            for result in results:
+                score, job_struct, cv_struct, filename = result.result()
+                print(f"score: {score}, job_struct: {job_struct}, cv_struct: {cv_struct}, filename: {filename}")
+                arr_result.append({
+                    "score": score,
+                    "cv_struct": cv_struct,
+                    "name": filename.split(".")[0]
+                })
+        # simpan ke database screenings
+        screenings_record = {
+            "user_id": current_user_id,
+            "job_deskription": job_deskription,
+            "created_at": datetime.datetime.utcnow(),
+            "result": arr_result
+        }
+        screenings_collection = db['screenings']
+        screenings_collection.insert_one(screenings_record)
+        return jsonify({"status": 200, "message": "Success", "data": {"job_deskription": job_deskription, "result": arr_result}}), 200
+    except Exception as e:
+        return jsonify({"status": 500, "message": "Failed Upload"}), 500
+    
+@app.route("/api/screenings", methods=["GET"])
+@token_required
+def get_screenings(current_user_id):
+    screenings_collection = db['screenings']
+    # urutkan berdaarkan created_at
+    screenings = screenings_collection.find({"user_id": current_user_id}).sort("created_at", -1)
+    history = []
+
+    for s in screenings:
+        history.append({
+            "job_deskription": s["job_deskription"],
+            "result": s["result"],
+            "created_at": s["created_at"]
+        })
+    return jsonify({"status": 200, "message": "Success", "data": history}), 200
+
+# buat api perankingan berdasarkan score
+@app.route("/api/ranking", methods=["GET"])
+@token_required
+def get_ranking(current_user_id):
+    scrennings = db['screenings']
+    screenings_result = scrennings.find({"user_id": current_user_id}).sort("created_at", -1)
+    cv_result = screenings_result.get("result")
+
+@app.route("/api/ranking/<screening_id>", methods=["GET"])
+@token_required
+def get_ranking_by_id(current_user_id, screening_id):
+    try:
+        screenings_collection = db['screenings']
+        
+        try:
+            obj_id = ObjectId(screening_id)
+        except Exception:
+            return jsonify({
+                "status": 400, 
+                "message": "Invalid Screening ID format."
+            }), 400
+
+        screening_doc = screenings_collection.find_one({
+            "_id": obj_id,
+            "user_id": current_user_id
+        })
+
+        if not screening_doc:
+            return jsonify({
+                "status": 404, 
+                "message": "Screening not found or access denied."
+            }), 404
+
+        results = screening_doc.get("result", [])
+        
+        if not results:
+            return jsonify({
+                "status": 200, 
+                "message": "Screening found but no candidates processed.", 
+                "data": []
+            }), 200
+
+        ranked_results = sorted(results, key=lambda x: x.get("score", 0), reverse=True)
+
+        final_data = []
+        for rank, item in enumerate(ranked_results, start=1):
+            final_data.append({
+                "rank": rank,
+                "name": item.get("name"),
+                "score": round(item.get("score", 0), 4), 
+                "cv_struct": item.get("cv_struct", ""),
             })
 
-    # for file in files:
-    #     text = ekstraksi_pdf_cv(file, file.filename)
-    #     clean_cv = clean_cv_text(text)
-    #     vec_cv = get_embedding(clean_cv)
-    #     token = inspect_tokens(clean_cv)
-    #     arr_token.append(token)
-    #     arr_vector.append(vec_cv.tolist())
-    #     arr_text.append(clean_cv)
+        return jsonify({
+            "status": 200,
+            "message": "Success",
+            "data": {
+                "screening_id": str(screening_doc['_id']),
+                "job_description_preview": screening_doc.get('job_deskription', '')[:100] + "...",
+                "total_candidates": len(final_data),
+                "created_at": screening_doc.get('created_at'),
+                "ranked_list": final_data
+            }
+        }), 200
 
-    return jsonify({"status": 200, "message": "Success", "data": arr_result}), 200
-    # if file:
-    #     text = ekstraksi_pdf_cv(file, file.filename)
-    #     clean_cv = clean_cv_text(text)
-    #     vec_cv = get_embedding(clean_cv)
-    #     token = inspect_tokens(clean_cv)
-    #     return jsonify({"token": token, "vektor": vec_cv.tolist(), "text": clean_cv}), 200
-    # else:
-    #     return jsonify({"error": "No file uploaded"}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": 500, 
+            "message": f"Internal Server Error: {str(e)}"
+        }), 500
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
